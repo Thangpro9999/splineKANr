@@ -1,0 +1,263 @@
+---
+title: "B-spline Kolmogorov-Arnold Networks in R: method, validation and an application to PLS-SEM latent scores"
+output: rmarkdown::html_vignette
+bibliography: references.bib
+vignette: >
+  %\VignetteIndexEntry{Method, validation and application}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7,
+                      fig.height = 3.2)
+```
+
+This vignette documents what `splineKANr` computes, how the implementation
+was validated, and how it can be used after a partial least squares
+structural equation model (PLS-SEM). The recorded results quoted in
+Sections 3-5 were produced by the scripts listed in
+`system.file("REPRODUCE.md", package = "splineKANr")`; the code shown here
+runs in seconds with the base R backend.
+
+## 1. Model
+
+A KAN [@liu2024kan] with widths $(n_0, \dots, n_L)$ composes layers
+$x^{(l+1)}_j = \sum_{i=1}^{n_l} \phi^{(l)}_{ij}\big(x^{(l)}_i\big) + b^{(l)}_j$.
+Each edge function is
+
+$$
+\phi_{ij}(x) = m_{ij}\Big( w^{b}_{ij}\, \mathrm{silu}(x)
+  + w^{s}_{ij} \sum_{m=1}^{G+k} c_{ijm} B_{m,k}(x) \Big),
+$$
+
+with a mask $m_{ij} \in \{0, 1\}$, base and spline weights $w^b, w^s$ and
+B-splines $B_{m,k}$ of degree $k$ on an extended knot vector
+$t_1 < \dots < t_{G+2k+1}$ ($G$ intervals on the domain $[t_{k+1}, t_{G+k+1}]$
+plus $k$ knots on each side, as in pykan). The basis follows the Cox-de Boor
+recursion on half-open intervals $[t_i, t_{i+1})$,
+
+$$
+B_{i,0}(x) = 1\{t_i \le x < t_{i+1}\},\qquad
+B_{i,p}(x) = \frac{x - t_i}{t_{i+p} - t_i} B_{i,p-1}(x)
+ + \frac{t_{i+p+1} - x}{t_{i+p+1} - t_{i+1}} B_{i+1,p-1}(x),
+$$
+
+and its derivative is
+$B'_{i,p} = \frac{p}{t_{i+p}-t_i}B_{i,p-1} - \frac{p}{t_{i+p+1}-t_{i+1}}B_{i+1,p-1}$.
+Outside the domain the spline part is, depending on `extrapolate`,
+zero (`"none"`, pykan's behavior), held constant (`"clamp"`) or continued
+by its first-order Taylor expansion at the boundary (`"linear"`, default),
+so that the network stays continuous and has non-zero gradients for inputs
+beyond the training range.
+
+```{r}
+library(splineKANr)
+knots <- kan_make_grid(1, grid_size = 5, spline_order = 3)[1, ]
+x <- seq(-1, 1, length.out = 201)
+B <- kan_bspline_basis_r(x, knots, 3, right_closed = TRUE)
+range(rowSums(B))          # partition of unity on the domain
+```
+
+## 2. Estimation
+
+`kan_fit()` minimizes the mean squared error on min-max scaled inputs
+(mapped to the grid range) and a standardized response, with Adam
+(either backend) or LBFGS (torch backend). A validation split drives early
+stopping and the parameters of the best epoch are restored. Grids can be
+adapted to the data every `grid_update_every` epochs: the new knots are the
+blend $\epsilon\, t^{\text{uniform}} + (1-\epsilon)\, t^{\text{quantile}}$
+of the sample ($\epsilon$ = `grid_eps`), layer by layer, and the spline
+coefficients are refitted to the old edge functions by least squares with
+relative ridge penalty `grid_ridge`. Optional regularization is pykan's
+L1 + entropy penalty on edge activations plus coefficient penalties.
+
+Two backends compute the same model: R `torch` (autograd, CPU or GPU) and a
+base R implementation with analytic back-propagation (`backend = "r"`),
+which needs no libtorch and serves as the reference for the torch backend.
+
+## 3. Validation
+
+The checks distinguish *numerical equivalence* (same inputs and parameters
+give the same numbers) from *algorithmic equivalence* (the same procedure,
+with its own random initialization, gives results with the same
+distribution).
+
+**Numerical, components.** The basis agrees with
+`splines::splineDesign()`, derivatives with `splineDesign(derivs = 1)` and
+central differences, parameter gradients with finite differences and with
+torch autograd:
+
+```{r}
+v <- kan_validate_basis(grid_sizes = c(3, 5), spline_orders = 1:3,
+                        backend = "r")
+v[, c("grid_size", "spline_order", "max_err_splineDesign", "pass")]
+g <- kan_validate_gradient(widths = list(c(2, 3, 1)), extrapolate = "linear",
+                           backend = "r")
+g[, c("width", "comparison", "max_rel_err", "pass")]
+```
+
+**Numerical, pykan.** Fixtures generated with pykan 0.2.8 (float64) are part
+of the test suite: KANLayer basis, forward pass, gradients and grid update
+(error < 1e-10); MultKAN networks with up to three layers (forward and
+gradients < 1e-10); and complete `MultKAN.fit(opt = "Adam")` runs. Recorded
+results of the training comparison:
+
+| Case | Steps | Grid updates | Max. relative loss difference | Max. parameter difference at the end |
+|---|---|---|---|---|
+| sin, [1, 1] | 300 | no | 6e-15 | 2e-16 |
+| interaction, [2, 4, 1] | 300 | no | 1e-14 | 3e-15 |
+| sin, [1, 1] | 200 | 10, `grid_ridge = 0` | 5e-15 | 4e-15 |
+| additive, [2, 5, 1] | 200 | 10, `grid_ridge = 0` | 1e-13 | 2e-13 |
+| sin, [1, 1] | 200 | 10, default `grid_ridge = 1e-8` | 6e-6 | 2e-5 |
+| additive, [2, 5, 1] | 200 | 10, default `grid_ridge = 1e-8` | 3e-4 | 2e-3 |
+
+The only source of difference in the last two rows is the ridge penalty of
+the refit; it is a deliberate stabilization, and `grid_ridge = 0`
+reproduces pykan's plain least squares.
+
+**Algorithmic.** For three problems with noise standard deviation 0.1,
+10 seeds each, both packages ran 500 full-batch Adam steps with pykan's
+grid schedule from their own initialization. Mean test RMSE (sd):
+
+| Problem | splineKANr | pykan | Paired difference (95% CI) | Wilcoxon p |
+|---|---|---|---|---|
+| sin, [1, 1] | 0.1005 (0.0013) | 0.1004 (0.0012) | 0.0001 (-0.0000, 0.0002) | 0.43 |
+| interaction, [2, 4, 1] | 0.1087 (0.0022) | 0.1100 (0.0028) | -0.0013 (-0.0028, 0.0002) | 0.06 |
+| additive, [2, 5, 1] | 0.1189 (0.0223) | 0.1155 (0.0076) | 0.0035 (-0.0099, 0.0169) | 0.92 |
+
+Both packages reach the noise floor (0.1) on the one-dimensional problem
+and differ by less than 0.002 on average elsewhere; no difference is
+statistically significant. The larger spread of splineKANr on the additive
+problem comes from one seed (test RMSE 0.181) that converged to a poorer
+solution, a reminder that results of a single run depend on the
+initialization. The pykan default LBFGS optimizer is compared only when the
+torch backend is available.
+
+## 4. Benchmark
+
+Six synthetic problems, 10 seeds, $n_{\text{train}} = 500$,
+$n_{\text{test}} = 1000$; each tuned method chooses from a small grid on the
+same inner hold-out. RMSE against the noise-free function (mean over seeds):
+
+| Problem | B-spline KAN | Fourier KAN | ANN | GAM | Random forest | OLS |
+|---|---|---|---|---|---|---|
+| sin | 0.0052 | 0.0209 | 0.0043 | **0.0011** | 0.0072 | 0.447 |
+| poly | **0.0019** | 0.0070 | 0.0036 | 0.0034 | 0.0037 | 0.153 |
+| noisy_sin ($\sigma = 0.2$) | 0.0293 | 0.0696 | **0.0234** | 0.0255 | 0.1203 | 0.447 |
+| interaction ($x_1 x_2$) | **0.0058** | 0.0253 | 0.0070 | 0.3343 | 0.1094 | 0.334 |
+| additive | 0.0109 | 0.0463 | 0.0143 | **0.0070** | 0.1085 | 0.625 |
+| Friedman 1 ($p = 10$) | 1.207 | 1.569 | **0.570** | 1.394 | 2.044 | 2.441 |
+
+The B-spline KAN is the most accurate method on the polynomial and the
+interaction problems and close to the best on the smooth univariate and
+additive ones, where a GAM, which matches the true structure exactly, is
+better. It is consistently and clearly more accurate than the Fourier KAN
+comparator under the same protocol. On Friedman's ten-input problem the
+ANN is about twice as accurate and the KAN results vary strongly between
+seeds (sd 0.35): with one hidden layer of width 3 chosen from the small
+tuning grid, the KAN is not flexible enough for this target. The KAN is
+also the slowest method here (base R backend, 3-18 s per fit).
+
+## 5. Application: predicting satisfaction and loyalty from PLS-SEM scores
+
+A common workflow in marketing and management research estimates a
+measurement and structural model by PLS-SEM [@hair2022primer] and then asks
+whether the linear structural equations miss non-linear effects. Below, a
+simulated customer survey (two exogenous constructs with five
+10-point items each and a satisfaction construct with three items) is
+analyzed with the base R PLS-PM routine shipped in `inst/applications`,
+and an additive KAN is fitted to the latent scores.
+
+```{r}
+src <- system.file("applications", "pls_pm.R", package = "splineKANr")
+source(src)
+set.seed(42)
+n <- 600
+quality <- rnorm(n)
+image <- 0.5 * quality + sqrt(0.75) * rnorm(n)
+sat <- 0.4 * quality + 0.9 * pmax(image, 0) + rnorm(n, sd = 0.4)
+items <- function(lv, k, prefix) {
+  z <- sapply(seq_len(k), function(i) 0.8 * scale(lv)[, 1] +
+                0.6 * rnorm(length(lv)))
+  out <- pmax(pmin(round(5.5 + 1.6 * z), 10), 1)
+  colnames(out) <- paste0(prefix, seq_len(k))
+  out
+}
+survey <- data.frame(items(quality, 5, "q"), items(image, 5, "im"),
+                     items(sat, 3, "s"))
+blocks <- list(Quality = paste0("q", 1:5), Image = paste0("im", 1:5),
+               Satisfaction = paste0("s", 1:3))
+paths <- rbind(c("Quality", "Satisfaction"), c("Image", "Satisfaction"))
+pls <- pls_pm(survey, blocks, paths)
+pls_path_table(pls, "pls")
+round(rbind(CR = pls$cr, AVE = pls$ave), 3)
+```
+
+```{r}
+sc <- pls$scores
+train <- seq_len(400)
+kfit <- kan_fit(sc[train, c("Quality", "Image")], sc[train, "Satisfaction"],
+                hidden = integer(), grid_size = 5, epochs = 300,
+                backend = "r", seed = 1)
+lfit <- lm(Satisfaction ~ Quality + Image, data = as.data.frame(sc[train, ]))
+test <- as.data.frame(sc[-train, ])
+rbind(
+  kan = kan_metrics(test$Satisfaction,
+                    predict(kfit, test[, c("Quality", "Image")],
+                            backend = "r")),
+  ols = kan_metrics(test$Satisfaction, predict(lfit, test))
+)
+```
+
+```{r, fig.height = 3}
+op <- par(mfrow = c(1, 2))
+for (v in c("Quality", "Image")) {
+  plot(kan_partial_dependence(kfit, sc[train, c("Quality", "Image")], v),
+       main = v, ylab = "PD of Satisfaction")
+}
+par(op)
+```
+
+In this simulation `Image` raises satisfaction only when it is above
+average (a kinked effect), which the linear structural model can represent
+only by a single slope. The partial dependence of the KAN recovers the kink
+(flat below the mean, rising above it) and the out-of-sample error is
+somewhat lower than that of OLS. The curve for `Quality`, whose true effect
+is linear, bends slightly in the tails where there are few observations;
+such wiggles should not be over-interpreted. The gain is
+not automatic: with half the sample size and a milder non-linearity the
+same comparison favored OLS, because the extra flexibility costs variance.
+Whether a KAN improves on the structural equations is an empirical question
+to be settled out of sample, as below. For honest predictive assessment the PLS weights must be estimated
+on the training rows only; `inst/applications/run_application.R` does this
+inside every fold of a repeated cross-validation. Recorded results on three
+public customer data sets: the ECSI data `seminr::mobi` (n = 250) and
+`plspm::satisfaction` (n = 250), and the corporate reputation data
+`seminr::corp_rep_data` (n = 344; formative drivers, Hair et al. 2022).
+10 x 5-fold cross-validation; RMSE of the standardized target score, mean
+over repeats; "PLS-SEM" is OLS on the target's predecessors in the
+structural model, all other methods use every antecedent construct:
+
+| Data, target | PLS-SEM | B-spline KAN | GAM | ANN | Random forest | Fourier KAN |
+|---|---|---|---|---|---|---|
+| mobi, satisfaction | **0.584** | 0.616 | 0.592 | 0.598 | 0.623 | 0.657 |
+| mobi, loyalty | **0.753** | 0.776 | 0.770 | 0.792 | 0.753 | 0.832 |
+| satisfaction, satisfaction | **0.567** | 0.601 | 0.599 | 0.590 | 0.587 | 0.630 |
+| satisfaction, loyalty | 0.723 | 0.722 | **0.710** | 0.719 | 0.718 | 0.767 |
+| corp_rep, satisfaction | **0.852** | 0.864 | 0.860 | 0.869 | 0.899 | 0.898 |
+| corp_rep, loyalty | **0.667** | 0.682 | 0.679 | 0.678 | 0.714 | 0.720 |
+
+In these data the linear structural model predicts as well as or better
+than every flexible method, and the B-spline KAN performs like a GAM or an
+ANN. With 250-350 respondents and latent scores that are linear
+combinations of Likert items, there is no detectable non-linearity that
+pays for the extra parameters. Here the KAN is useful as a diagnostic:
+its additive partial-dependence curves give a direct visual check of the
+linearity assumption of the structural equations, and its
+cross-validated error shows that relaxing that assumption does not
+improve prediction. The same pipeline is meant for data where
+non-linear effects (thresholds, saturation) are expected, or for larger
+samples.
+
+## References

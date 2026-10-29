@@ -1,0 +1,40 @@
+Package: splineKANr
+Type: Package
+Title: B-Spline Kolmogorov-Arnold Networks in Native R 'torch'
+Version: 0.5.1
+Authors@R:
+    person(given = "Thang", family = "Le-Dinh",
+           email = "thang87sg@gmail.com",
+           role = c("aut", "cre", "cph"))
+Description: Implements Kolmogorov-Arnold Networks (KAN) whose edge
+    functions are B-splines plus a residual base activation, written in
+    native R on top of the 'torch' package. Provides Cox-de Boor basis
+    evaluation with explicit extrapolation policies, multi-layer networks,
+    Adam and L-BFGS training with validation, early stopping, input and
+    output normalization, gradient clipping and reproducible seeds,
+    adaptive (sample-based) grid updates, grid refinement, KAN-specific
+    sparsity regularization, pruning, edge-function visualization and
+    model persistence. A dependency-free base R reference implementation
+    with analytic gradients is included as a numerical oracle and as a
+    training backend that does not need 'libtorch'. The design follows
+    Liu et al. (2024) <doi:10.48550/arXiv.2404.19756>.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Language: en-US
+Depends: R (>= 4.1.0)
+Imports:
+    graphics,
+    grDevices,
+    splines,
+    stats,
+    torch (>= 0.13.0),
+    utils
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    jsonlite
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)
+Config/roxygen2/version: 8.1.0

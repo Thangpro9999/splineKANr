@@ -1,0 +1,114 @@
+---
+title: "Getting started with splineKANr"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with splineKANr}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 6,
+                      fig.height = 4)
+has_torch <- torch::torch_is_installed()
+backend <- if (has_torch) "torch" else "r"
+```
+
+`splineKANr` fits Kolmogorov-Arnold Networks (KAN; Liu et al., 2024) whose
+edge functions are
+
+$$\phi_{ij}(x) = w^{b}_{ij}\,\mathrm{silu}(x) + w^{s}_{ij} \sum_m c_{ijm} B_m(x),$$
+
+with cubic B-splines $B_m$ on an extended knot grid. Each node sums its
+incoming edges. Training uses R `torch` autograd; a base R reference
+implementation with analytic gradients (`backend = "r"`) evaluates the same
+model without libtorch and is used to validate the torch backend.
+
+This vignette uses backend **`r backend`**.
+
+## 1. Fit a model
+
+```{r}
+library(splineKANr)
+d  <- kan_synthetic("interaction", n = 400, seed = 1)   # y = x1 * x2
+te <- kan_synthetic("interaction", n = 500, seed = 2)
+
+fit <- kan_fit(d$x, d$y, hidden = 4, epochs = 150, batch_size = 64,
+               lr = 0.02, patience = 30, grid_update_every = 10,
+               grid_update_until = 50, seed = 1, backend = backend)
+fit
+kan_metrics(te$y, predict(fit, te$x))
+```
+
+`kan_fit()` normalizes predictors onto the spline domain with statistics
+from the training rows only, keeps a validation split for early stopping,
+restores the best epoch and records the full history:
+
+```{r}
+kan_plot_history(fit)
+```
+
+## 2. Inspect the learned functions
+
+```{r, fig.height = 6}
+plot(fit, layer = 1, data = d$x)
+```
+
+```{r}
+kan_plot_network(fit, d$x)
+plot(kan_partial_dependence(fit, d$x, "x1"))
+```
+
+`kan_activation_check()` reports how many layer inputs fall outside the
+spline domain. With the default `extrapolate = "linear"` the edges continue
+linearly there, so gradients do not vanish.
+
+```{r}
+fit$activation_check
+```
+
+## 3. Grid refinement, pruning, regularization
+
+```{r}
+fine <- kan_refine(fit, d$x, grid_size = 10)       # G = 5 -> 10
+fine <- kan_fit(d$x, d$y, init = fine, epochs = 50, batch_size = 64,
+                lr = 0.01, seed = 1, backend = backend)
+kan_metrics(te$y, predict(fine, te$x))
+
+pruned <- kan_prune(fine, d$x)
+pruned$pruning$removed_nodes
+```
+
+Sparsity regularization in the style of pykan (L1 + entropy of edge
+scales) requires the torch backend:
+
+```{r, eval = FALSE}
+fit_sparse <- kan_fit(d$x, d$y, hidden = 4, epochs = 200,
+                      reg = kan_reg_control(lambda = 1e-3))
+```
+
+## 4. Save and reload
+
+```{r}
+f <- tempfile(fileext = ".rds")
+kan_save(fine, f)
+same <- kan_load(f)
+max(abs(predict(same, te$x) - predict(fine, te$x)))
+```
+
+## 5. Numerical validation
+
+```{r}
+v <- kan_validate_basis(grid_sizes = 5, backend = "r")
+v[, c("spline_order", "max_err_splineDesign", "max_err_partition", "pass")]
+g <- kan_validate_gradient(widths = list(c(2, 3, 1)), backend = "r")
+g[, c("extrapolate", "comparison", "max_rel_err", "pass")]
+```
+
+`kan_validate_all(backend = "both")` additionally compares torch autograd
+with the analytic gradients when libtorch is installed.
+
+## References
+
+Liu, Z. et al. (2024). KAN: Kolmogorov-Arnold Networks.
+doi:10.48550/arXiv.2404.19756
