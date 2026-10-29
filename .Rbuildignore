@@ -1,0 +1,10 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^README\.Rmd$
+^LICENSE\.md$
+^validation-logs$
+^cran-comments\.md$
+^VERIFICATION_REPORT\.md$
+^RUN_IN_RSTUDIO\.R$
+^CRAN-SUBMISSION$
