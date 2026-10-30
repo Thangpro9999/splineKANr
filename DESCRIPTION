@@ -1,7 +1,7 @@
 Package: splineKANr
 Type: Package
 Title: B-Spline Kolmogorov-Arnold Networks in Native R 'torch'
-Version: 0.5.1
+Version: 0.5.2
 Authors@R:
     person(given = "Thang", family = "Le-Dinh",
            email = "thang87sg@gmail.com",
@@ -18,7 +18,7 @@ Description: Implements Kolmogorov-Arnold Networks (KAN) whose edge
     with analytic gradients is included as a numerical oracle and as a
     training backend that does not need 'libtorch'. The design follows
     Liu et al. (2024) <doi:10.48550/arXiv.2404.19756>.
-License: MIT + file LICENSE
+License: file LICENSE
 Encoding: UTF-8
 Language: en-US
 Depends: R (>= 4.1.0)

@@ -1,3 +1,11 @@
+# splineKANr 0.5.2
+
+* License changed from MIT to an academic and non-commercial license
+  (`License: file LICENSE`): use, modification and redistribution are
+  permitted for education and non-commercial research only, with
+  attribution to Thang Le-Dinh; commercial use requires written
+  permission. No change to code or results.
+
 # splineKANr 0.5.1
 
 * Documentation only: consistent US English spelling (the package declares

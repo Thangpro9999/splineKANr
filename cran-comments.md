@@ -11,10 +11,17 @@ in native R on top of the 'torch' package. It contains no compiled code.
   `R CMD check --no-manual` of 0.5.0 -- Status: OK; all 251 tests run
   (none skipped), including the 12 torch-backend tests.
 * Ubuntu 24.04 (x86_64-conda-linux-gnu), R 4.5.3, torch 0.17.0 without
-  libtorch: `R CMD check --as-cran` of 0.5.0 -- 0 errors | 0 warnings |
+  libtorch: `R CMD check --as-cran` of 0.5.1 -- 0 errors | 0 warnings |
   3 notes (new submission plus two environmental notes, see below).
-* win-builder (R-devel): TODO before submission
-* mac-builder (R-release): TODO before submission
+* win-builder, R-release (R 4.6.2 ucrt, Windows Server 2022), version 0.5.1
+  (and 0.5.0): Status: 1 NOTE (new submission; see below).
+* win-builder, R-devel: submitted, result pending.
+* GitHub Actions (r-lib/actions, libtorch installed): macOS-latest
+  (release), windows-latest (release), ubuntu-latest (devel, release,
+  oldrel-1) -- all R CMD check jobs passed.
+* mac-builder (R 4.6.1, macOS arm64): could not check because 'torch'
+  and the suggested packages were not installed on that machine
+  ("Package required but not available: 'torch'"); no package code was run.
 
 ## R CMD check results
 
@@ -22,6 +29,10 @@ in native R on top of the 'torch' package. It contains no compiled code.
 
 * checking CRAN incoming feasibility ... NOTE
   New submission
+
+  Possibly misspelled words in DESCRIPTION: Liu, et, al (the citation
+  "Liu et al. (2024)") and de (the "Cox-de Boor" recursion). These are
+  correct.
 
 Notes seen only in the local Linux environment, not caused by the package:
 "unable to verify current time" and an unreachable DOI URL (no internet

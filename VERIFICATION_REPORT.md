@@ -101,7 +101,7 @@ cải thiện dự báo.
   định số học/thuật toán, benchmark, ứng dụng PLS-SEM với dữ liệu mô phỏng
   chạy được trên CRAN) + `references.bib`.
 - `inst/REPRODUCE.md`: lệnh, seed, phiên bản phần mềm cho mọi kết quả.
-- Giấy phép: gói MIT; phụ thuộc torch (MIT), base R. Không phân phối lại dữ
+- Giấy phép: từ 0.5.2 là giấy phép học thuật, phi thương mại (`file LICENSE`; 0.5.0–0.5.1 là MIT); phụ thuộc torch (MIT), base R. Không phân phối lại dữ
   liệu bên thứ ba (seminr, plspm là GPL-3); fixture pykan chỉ là số liệu đầu
   ra (pykan MIT), không chép mã.
 - API: 37 hàm export, không đổi tên; thêm `kan_fit(grid_ridge = )`; sửa lỗi
