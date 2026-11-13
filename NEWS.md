@@ -1,3 +1,14 @@
+# splineKANr 0.5.3
+
+* License changed to the Apache License 2.0 (`License: Apache License (== 2.0)`),
+  replacing the academic and non-commercial license of 0.5.2 (which CRAN
+  does not accept) and the MIT license of 0.5.0-0.5.1.
+* New `inst/NOTICE` with the attribution "This product includes software
+  developed by Thang Le-Dinh"; Apache-2.0 Section 4(d) requires
+  redistributions and derivative works to keep it.
+* New `inst/CITATION` (`citation("splineKANr")`) and `CITATION.cff`.
+* No change to code or results.
+
 # splineKANr 0.5.2
 
 * License changed from MIT to an academic and non-commercial license

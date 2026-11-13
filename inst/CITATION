@@ -1,0 +1,11 @@
+bibentry(
+  bibtype = "Manual",
+  title = "{splineKANr}: B-Spline Kolmogorov-Arnold Networks in Native {R} 'torch'",
+  author = person(given = "Thang", family = "Le-Dinh",
+                  email = "thang87sg@gmail.com"),
+  year = "2026",
+  note = paste("R package version", meta$Version),
+  textVersion = paste0(
+    "Le-Dinh, T. (2026). splineKANr: B-Spline Kolmogorov-Arnold Networks ",
+    "in Native R 'torch'. R package version ", meta$Version, ".")
+)

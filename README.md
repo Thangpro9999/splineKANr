@@ -19,3 +19,17 @@ kan_validate_all()           # basis, derivative, gradient checks
 Status: see `NEWS.md`, `inst/validation/` and the verification report
 shipped with each release. pykan (Liu et al., 2024) is used only to produce
 reference numbers; the package does not depend on Python.
+
+## License and citation
+
+splineKANr is copyright 2026 Thang Le-Dinh and is released under the
+Apache License 2.0 (`LICENSE.md`). Redistributions and derivative works must
+keep the attribution notices in `inst/NOTICE` (Apache-2.0, Section 4(d)).
+
+If you use splineKANr in academic work, please cite it:
+
+```r
+citation("splineKANr")
+```
+
+GitHub also reads `CITATION.cff` ("Cite this repository").

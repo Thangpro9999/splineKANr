@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use splineKANr, please cite it as below."
+title: "splineKANr: B-Spline Kolmogorov-Arnold Networks in Native R 'torch'"
+type: software
+authors:
+  - family-names: "Le-Dinh"
+    given-names: "Thang"
+version: 0.5.3
+date-released: 2026-10-30
+license: Apache-2.0
+repository-code: "https://github.com/Thangpro9999/splineKANr"
